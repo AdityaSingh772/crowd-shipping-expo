@@ -5,6 +5,7 @@ import MapScreen from "../screens/dashboard/MapScreen"
 import DeliveriesScreen from "../screens/dashboard/DeliveriesScreen"
 import PaymentsScreen from "../screens/dashboard/PaymentsScreen"
 import OrderAssignmentScreen from "../screens/delivery-partner/order-assignment-screen"
+import {MatchScreen} from '../screens/delivery-partner/match-screen'
 
 // Define types for the tab bar icon props
 type TabBarIconProps = {
@@ -78,6 +79,15 @@ export default function DashboardNavigator() {
         options={{
           tabBarIcon: ({ color, size }: TabBarIconProps) => (
             <MaterialIcons name="payment" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Match"
+        component={MatchScreen}
+        options={{
+          tabBarIcon: ({ color, size }: TabBarIconProps) => (
+            <MaterialIcons name="local-shipping" size={size} color={color} />
           ),
         }}
       />
