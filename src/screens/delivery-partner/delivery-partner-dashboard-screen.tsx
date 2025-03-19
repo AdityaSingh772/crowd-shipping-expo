@@ -14,7 +14,7 @@ function PartnerDashboardHomeScreen() {
   
   return (
     <View style={styles.dashboardContainer}>
-      <Text style={styles.welcomeText}>Welcome, {user?.name || 'Partner'}!</Text>
+      <Text style={styles.welcomeText}>Welcome, {user?.firstName || 'Partner'}!</Text>
       <Text style={styles.subtitle}>Delivery Partner Dashboard</Text>
       
       <View style={styles.statsContainer}>

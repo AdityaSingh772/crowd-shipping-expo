@@ -1,16 +1,18 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../config/constant';
+import { API_URL, ENDPOINTS } from '../config/constant';
 import { UserType } from '../context/AuthContext';
 
 // Create axios instance with default config
 const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api/v1`,  // Adding /api/v1 here once
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 30000, // Increased to 30 seconds for slower networks
 });
+
+console.log('API base URL:', apiClient.defaults.baseURL);
 
 // Add request interceptor to include auth token
 apiClient.interceptors.request.use(
@@ -71,34 +73,16 @@ apiClient.interceptors.response.use(
 );
 
 // Helper function to ping the server
-const pingServer = async () => {
-  try {
-    // Simple HEAD request that should be fast
-    await axios.head(API_URL, { timeout: 5000 });
-    return true;
-  } catch (error) {
-    console.error('Server ping failed:', error);
-    return false;
-  }
-};
 
 // Auth service
 export const authService = {
   // Test API connection
   testConnection: async () => {
     try {
-      // Ping server first
-      const isReachable = await pingServer();
-      
-      if (!isReachable) {
-        return {
-          success: false,
-          message: `Failed to connect to API server at ${API_URL}. Please check if the server is running and reachable.`
-        };
-      }
+      // Ping server firs
       
       // Try a simple GET request to the root endpoint
-      const response = await axios.get(API_URL, { timeout: 10000 });
+      const response = await apiClient.get('/');
       
       return {
         success: true,
@@ -112,7 +96,7 @@ export const authService = {
       
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNREFUSED') {
-          errorMessage = `Connection refused. Make sure your server at ${API_URL} is running.`;
+          errorMessage = `Connection refused. Make sure your server at ${API_URL}/api/v1 is running.`;
         } else if (error.code === 'ECONNABORTED') {
           errorMessage = 'Connection timed out. Server might be slow or unreachable.';
         }
@@ -124,112 +108,91 @@ export const authService = {
       };
     }
   },
-
-  // Register a new user
-  register: async (
-    name: string,
-    email: string,
-    password: string,
-    userType: UserType,
-    phoneNumber?: string,
-    vehicleType?: string
-  ) => {
-    try {
-      // First check if server is reachable
-      const isReachable = await pingServer();
-      if (!isReachable) {
-        return {
-          success: false,
-          message: 'Cannot connect to server. Please check your network or server status.',
-        };
-      }
-      
-      // Split name into first and last name
-      const nameParts = name.split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-      
-      // Build request data
-      const requestData = {
-        firstName,
-        lastName,
-        email,
-        password,
-        phoneNumber: phoneNumber || '',
-        role: userType === 'partner' ? 'driver' : 'sender',
+// Register a new user
+register: async (
+  firstName: string,
+  lastName: string,
+  email: string,
+  password: string,
+  phoneNumber: string,
+  role: string,
+  vehicleType?: string
+) => {
+  try {
+   
+    // Build request data according to your backend controller requirements
+    const requestData = {
+      firstName,
+      lastName,
+      email,
+      password,
+      phoneNumber,
+      // Use 'carrier' if that's what your backend accepts, or convert from 'carrier' to 'driver' if needed
+      role: role === 'carrier' ? 'carrier' : 'sender',
+    };
+    
+    // The vehicleType is not used in the controller, so we can remove it from the request
+    // Note: Looking at your backend code, vehicleDetails is not processed in registerUser
+    
+    console.log('Registration request data:', requestData);
+    
+    // Make API call
+    const response = await apiClient.post(ENDPOINTS.REGISTER, requestData);
+    
+    console.log('Registration response status:', response.status);
+    console.log('Registration response data:', response.data);
+    
+    if (response.data && response.data.success) {
+      return {
+        success: true,
+        data: response.data.data || response.data,
       };
-      
-      if (userType === 'partner' && vehicleType) {
-        // @ts-ignore
-        requestData.vehicleType = vehicleType;
-      }
-      
-      console.log('Registration request data:', requestData);
-      
-      // Make API call
-      const response = await apiClient.post('/users/register', requestData);
-      
-      console.log('Registration response status:', response.status);
-      console.log('Registration response data:', response.data);
-      
-      if (response.data && response.data.success) {
-        return {
-          success: true,
-          data: response.data.data || response.data,
-        };
-      } else {
-        return {
-          success: false,
-          message: response.data?.message || 'Registration failed for unknown reason',
-        };
-      }
-    } catch (error) {
-      console.error('Registration error details:', error);
-      
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          return {
-            success: false,
-            message: error.response.data?.message || 'Registration failed',
-          };
-        } else if (error.request) {
-          // Network error - no response received
-          return {
-            success: false,
-            message: 'Network error. Server might be down or unreachable.',
-          };
-        }
-      }
-      
+    } else {
       return {
         success: false,
-        message: 'Network error. Please check your connection and try again.',
+        message: response.data?.message || 'Registration failed for unknown reason',
       };
     }
-  },
-  
+  } catch (error) {
+    console.error('Registration error details:', error);
+    
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        // Provide more detailed error information
+        console.error('Registration error response data:', error.response.data);
+        return {
+          success: false,
+          message: error.response.data?.message || 'Registration failed',
+        };
+      } else if (error.request) {
+        // Network error - no response received
+        return {
+          success: false,
+          message: 'Network error. Server might be down or unreachable.',
+        };
+      }
+    }
+    
+    return {
+      success: false,
+      message: 'Network error. Please check your connection and try again.',
+    };
+  }
+},
   // Login user
   login: async (email: string, password: string, userType: UserType) => {
     try {
       // First check if server is reachable
-      const isReachable = await pingServer();
-      if (!isReachable) {
-        return {
-          success: false,
-          message: 'Cannot connect to server. Please check your network or server status.',
-        };
-      }
+     
       
       console.log('Login request:', { email, userType });
       
-      const response = await apiClient.post('/users/login', {
+      const response = await apiClient.post(ENDPOINTS.LOGIN, {
         email,
-        password,
-        role: userType === 'partner' ? 'driver' : 'sender',
+        password
       });
       
       console.log('Login response status:', response.status);
-      console.log('Login response data type:', typeof response.data);
       
       if (response.data && response.data.success) {
         const userData = response.data.data?.user || response.data.user;
@@ -283,11 +246,11 @@ export const authService = {
     }
   },
   
-  // Logout user
+  // All other methods using ENDPOINTS constants
   logout: async () => {
     try {
       // Call logout endpoint to invalidate refresh token
-      await apiClient.post('/users/logout').catch(() => {
+      await apiClient.post(ENDPOINTS.LOGOUT).catch(() => {
         // Ignore logout endpoint errors
         console.log('Logout endpoint error ignored');
       });
@@ -318,15 +281,9 @@ export const authService = {
   forgotPassword: async (email: string) => {
     try {
       // Check server connectivity first
-      const isReachable = await pingServer();
-      if (!isReachable) {
-        return {
-          success: false,
-          message: 'Cannot connect to server. Please check your network or server status.',
-        };
-      }
+  
       
-      const response = await apiClient.post('/users/forgot-password', { email });
+      const response = await apiClient.post(ENDPOINTS.FORGOT_PASSWORD, { email });
       return {
         success: true,
         message: response.data.message,
@@ -354,7 +311,7 @@ export const authService = {
   // Reset password
   resetPassword: async (token: string, password: string) => {
     try {
-      const response = await apiClient.post(`/users/reset-password/${token}`, { password });
+      const response = await apiClient.post(`${ENDPOINTS.RESET_PASSWORD}/${token}`, { password });
       return {
         success: true,
         message: response.data.message,
@@ -387,15 +344,9 @@ export const authService = {
   getCurrentUser: async () => {
     try {
       // Check connectivity first
-      const isReachable = await pingServer();
-      if (!isReachable) {
-        return {
-          success: false,
-          message: 'Cannot connect to server. Please check your network or server status.',
-        };
-      }
+   
       
-      const response = await apiClient.get('/users/me');
+      const response = await apiClient.get(ENDPOINTS.CURRENT_USER);
       
       if (response.data && response.data.success) {
         return {
@@ -423,6 +374,118 @@ export const authService = {
             message: 'Network error. Server might be down or unreachable.',
           };
         }
+      }
+      
+      return {
+        success: false,
+        message: 'Network error. Please try again.',
+      };
+    }
+  },
+
+  // Verify email
+  verifyEmail: async (token: string) => {
+    try {
+      const response = await apiClient.post(`${ENDPOINTS.VERIFY_EMAIL}/${token}`);
+      return {
+        success: response.data.success,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Email verification error:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        return {
+          success: false,
+          message: error.response.data?.message || 'Email verification failed',
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Network error. Please try again.',
+      };
+    }
+  },
+
+  // Resend verification email
+  resendVerification: async () => {
+    try {
+      const response = await apiClient.post(ENDPOINTS.RESEND_VERIFICATION);
+      return {
+        success: response.data.success,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        return {
+          success: false,
+          message: error.response.data?.message || 'Failed to resend verification',
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Network error. Please try again.',
+      };
+    }
+  },
+
+  // Update user profile
+  updateProfile: async (profileData: any) => {
+    try {
+      const response = await apiClient.put(ENDPOINTS.UPDATE_USER, profileData);
+      
+      if (response.data && response.data.success) {
+        return {
+          success: true,
+          data: response.data.data,
+        };
+      } else {
+        return {
+          success: false,
+          message: response.data?.message || 'Failed to update profile',
+        };
+      }
+    } catch (error) {
+      console.error('Update profile error:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        return {
+          success: false,
+          message: error.response.data?.message || 'Failed to update profile',
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Network error. Please try again.',
+      };
+    }
+  },
+
+  // Update password
+  updatePassword: async (currentPassword: string, newPassword: string) => {
+    try {
+      const response = await apiClient.put(ENDPOINTS.UPDATE_PASSWORD, {
+        currentPassword,
+        newPassword,
+      });
+      
+      return {
+        success: response.data.success,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Update password error:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        return {
+          success: false,
+          message: error.response.data?.message || 'Failed to update password',
+        };
       }
       
       return {

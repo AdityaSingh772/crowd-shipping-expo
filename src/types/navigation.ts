@@ -20,4 +20,5 @@ export type DashboardTabParamList = {
   Map: undefined;
   Deliveries: undefined;
   Payments: undefined;
+  OrderAssignment: undefined; 
 };

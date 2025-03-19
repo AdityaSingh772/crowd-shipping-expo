@@ -23,16 +23,21 @@ export interface AuthContextType {
   userType: UserType;
   login: (email: string, password: string, userType: UserType) => Promise<boolean>;
   register: (
-    name: string, 
+    firstName: string, 
+    lastName: string, 
     email: string, 
     password: string, 
-    userType: UserType, 
-    phoneNumber?: string, 
+    phoneNumber: string,
+    role: string,
     vehicleType?: string
   ) => Promise<boolean>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<boolean>;
   resetPassword: (token: string, password: string) => Promise<boolean>;
+  verifyEmail: (token: string) => Promise<boolean>;
+  resendVerification: () => Promise<boolean>;
+  updateProfile: (profileData: any) => Promise<boolean>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
 }
 
 // Create the context with a default value
@@ -46,6 +51,10 @@ export const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   forgotPassword: async () => false,
   resetPassword: async () => false,
+  verifyEmail: async () => false,
+  resendVerification: async () => false,
+  updateProfile: async () => false,
+  updatePassword: async () => false,
 });
 
 export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
@@ -116,22 +125,24 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   };
 
   const register = async (
-    name: string, 
+    firstName: string, 
+    lastName: string, 
     email: string, 
     password: string, 
-    userType: UserType,
-    phoneNumber?: string,
+    phoneNumber: string,
+    role: string,
     vehicleType?: string
   ): Promise<boolean> => {
     try {
       setIsLoading(true);
       
       const result = await authService.register(
-        name,
+        firstName,
+        lastName,
         email,
         password,
-        userType,
         phoneNumber,
+        role,
         vehicleType
       );
       
@@ -223,6 +234,101 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     }
   };
 
+  const verifyEmail = async (token: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      const result = await authService.verifyEmail(token);
+      
+      if (result.success) {
+        Alert.alert(
+          'Email Verified',
+          'Your email has been verified successfully. You can now log in to your account.'
+        );
+        return true;
+      } else {
+        Alert.alert('Verification Failed', result.message || 'Failed to verify email. Please try again.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resendVerification = async (): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      const result = await authService.resendVerification();
+      
+      if (result.success) {
+        Alert.alert(
+          'Verification Email Sent',
+          'A new verification email has been sent to your email address.'
+        );
+        return true;
+      } else {
+        Alert.alert('Failed to Resend', result.message || 'Failed to resend verification email. Please try again.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateProfile = async (profileData: any): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      const result = await authService.updateProfile(profileData);
+      
+      if (result.success && result.data) {
+        setUser(result.data);
+        Alert.alert('Profile Updated', 'Your profile has been updated successfully.');
+        return true;
+      } else {
+        Alert.alert('Update Failed', result.message || 'Failed to update profile. Please try again.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Update profile error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      const result = await authService.updatePassword(currentPassword, newPassword);
+      
+      if (result.success) {
+        Alert.alert('Password Updated', 'Your password has been updated successfully.');
+        return true;
+      } else {
+        Alert.alert('Update Failed', result.message || 'Failed to update password. Please try again.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Update password error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -235,6 +341,10 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         logout,
         forgotPassword,
         resetPassword,
+        verifyEmail,
+        resendVerification,
+        updateProfile,
+        updatePassword,
       }}
     >
       {children}

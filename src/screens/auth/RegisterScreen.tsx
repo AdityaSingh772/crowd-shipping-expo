@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,23 +7,26 @@ import {
   TextInput,
   Alert,
   ScrollView,
-  StatusBar,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../../hooks/useAuth";
-import type { UserType } from "../../context/AuthContext";
+import { COLORS, SIZES, PATTERNS, VALIDATION } from "../../config/constant";
+import { StatusBar } from "expo-status-bar";
 
-type AuthStackParamList = {
+type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   ForgotPassword: undefined;
 };
 
 type RegisterScreenNavigationProp = NativeStackNavigationProp<
-  AuthStackParamList,
+  RootStackParamList,
   "Register"
 >;
 
@@ -33,230 +34,514 @@ export default function RegisterScreen() {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
   const { register } = useAuth();
 
-  const [name, setName] = useState("");
+  // Form state
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [userType, setUserType] = useState<UserType>("user");
+  const [role, setRole] = useState<"sender" | "carrier">("sender");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Validation states
+  const [firstNameError, setFirstNameError] = useState("");
+  const [lastNameError, setLastNameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  const [vehicleTypeError, setVehicleTypeError] = useState("");
+
+  // Validate first name
+  const validateFirstName = (): boolean => {
+    if (!firstName.trim()) {
+      setFirstNameError(VALIDATION.REQUIRED);
+      return false;
+    }
+    setFirstNameError("");
+    return true;
+  };
+
+  // Validate last name
+  const validateLastName = (): boolean => {
+    if (!lastName.trim()) {
+      setLastNameError(VALIDATION.REQUIRED);
+      return false;
+    }
+    setLastNameError("");
+    return true;
+  };
+
+  // Validate email
+  const validateEmail = (): boolean => {
+    if (!email) {
+      setEmailError(VALIDATION.REQUIRED);
+      return false;
+    } else if (!PATTERNS.EMAIL.test(email)) {
+      setEmailError(VALIDATION.INVALID_EMAIL);
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  // Validate phone number
+  const validatePhone = (): boolean => {
+    if (!phoneNumber) {
+      setPhoneError(VALIDATION.REQUIRED);
+      return false;
+    } else if (!PATTERNS.PHONE.test(phoneNumber)) {
+      setPhoneError(VALIDATION.INVALID_PHONE);
+      return false;
+    }
+    setPhoneError("");
+    return true;
+  };
+
+  // Validate password
+  const validatePassword = (): boolean => {
+    if (!password) {
+      setPasswordError(VALIDATION.REQUIRED);
+      return false;
+    } else if (password.length < 8) {
+      setPasswordError(VALIDATION.PASSWORD_LENGTH);
+      return false;
+    }
+    setPasswordError("");
+    return true;
+  };
+
+  // Validate confirm password
+  const validateConfirmPassword = (): boolean => {
+    if (!confirmPassword) {
+      setConfirmPasswordError(VALIDATION.REQUIRED);
+      return false;
+    } else if (confirmPassword !== password) {
+      setConfirmPasswordError(VALIDATION.PASSWORD_MATCH);
+      return false;
+    }
+    setConfirmPasswordError("");
+    return true;
+  };
+
+  // Validate vehicle type (only for carrier)
+  const validateVehicleType = (): boolean => {
+    if (role === "carrier" && !vehicleType.trim()) {
+      setVehicleTypeError(VALIDATION.REQUIRED);
+      return false;
+    }
+    setVehicleTypeError("");
+    return true;
+  };
+
+  // Handle role change
+  const handleRoleChange = (newRole: "sender" | "carrier") => {
+    setRole(newRole);
+    if (newRole === "sender") {
+      setVehicleTypeError("");
+    } else {
+      validateVehicleType();
+    }
+  };
+
+  // Handle registration
   const handleRegister = async () => {
-    // Validate inputs
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert("Error", "Please fill in all required fields");
+    // Validate all fields
+    const isFirstNameValid = validateFirstName();
+    const isLastNameValid = validateLastName();
+    const isEmailValid = validateEmail();
+    const isPhoneValid = validatePhone();
+    const isPasswordValid = validatePassword();
+    const isConfirmPasswordValid = validateConfirmPassword();
+    const isVehicleTypeValid = validateVehicleType();
+
+    // If any validation fails, stop the registration process
+    if (
+      !isFirstNameValid ||
+      !isLastNameValid ||
+      !isEmailValid ||
+      !isPhoneValid ||
+      !isPasswordValid ||
+      !isConfirmPasswordValid ||
+      !isVehicleTypeValid
+    ) {
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match");
-      return;
-    }
-
-    if (userType === "partner" && !vehicleType) {
-      Alert.alert("Error", "Please enter your vehicle type");
-      return;
-    }
-
+    // Start registration process
     setIsLoading(true);
-    const success = await register(name, email, password, userType);
-    setIsLoading(false);
+    try {
+      const success = await register(
+        firstName,
+        lastName,
+        email,
+        password,
+        phoneNumber,
+        role,
+        role === "carrier" ? vehicleType : undefined
+      );
+
+      if (success) {
+        // Registration successful, navigation handled in the provider (alert shown)
+        navigation.navigate("Login");
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      Alert.alert(
+        "Registration Failed",
+        "An unexpected error occurred. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#2A5D3C" barStyle="light-content" />
+      <StatusBar style="light" />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+          <MaterialIcons name="arrow-back" size={24} color={COLORS.WHITE} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Account</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Sign Up</Text>
-        <Text style={styles.subtitle}>Create your PackMan account</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidView}
+      >
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={styles.title}>Sign Up</Text>
+          <Text style={styles.subtitle}>Create your account</Text>
 
-        <View style={styles.userTypeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.userTypeButton,
-              userType === "user" && styles.userTypeButtonActive,
-            ]}
-            onPress={() => setUserType("user")}
-          >
-            <MaterialIcons
-              name="person"
-              size={20}
-              color={userType === "user" ? "#2A5D3C" : "#64748b"}
-            />
-            <Text
+          <View style={styles.userTypeContainer}>
+            <TouchableOpacity
               style={[
-                styles.userTypeText,
-                userType === "user" && styles.userTypeTextActive,
+                styles.userTypeButton,
+                role === "sender" && styles.userTypeButtonActive,
               ]}
+              onPress={() => handleRoleChange("sender")}
+              disabled={isLoading}
             >
-              User
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.userTypeButton,
-              userType === "partner" && styles.userTypeButtonActive,
-            ]}
-            onPress={() => setUserType("partner")}
-          >
-            <MaterialIcons
-              name="local-shipping"
-              size={20}
-              color={userType === "partner" ? "#2A5D3C" : "#64748b"}
-            />
-            <Text
-              style={[
-                styles.userTypeText,
-                userType === "partner" && styles.userTypeTextActive,
-              ]}
-            >
-              Delivery Partner
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Full Name</Text>
-            <View style={styles.inputWrapper}>
               <MaterialIcons
                 name="person"
                 size={20}
-                color="#64748b"
-                style={styles.inputIcon}
+                color={role === "sender" ? COLORS.PRIMARY : COLORS.SECONDARY}
               />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your full name"
-                value={name}
-                onChangeText={setName}
+              <Text
+                style={[
+                  styles.userTypeText,
+                  role === "sender" && styles.userTypeTextActive,
+                ]}
+              >
+                Sender
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.userTypeButton,
+                role === "carrier" && styles.userTypeButtonActive,
+              ]}
+              onPress={() => handleRoleChange("carrier")}
+              disabled={isLoading}
+            >
+              <MaterialIcons
+                name="local-shipping"
+                size={20}
+                color={role === "carrier" ? COLORS.PRIMARY : COLORS.SECONDARY}
               />
-            </View>
+              <Text
+                style={[
+                  styles.userTypeText,
+                  role === "carrier" && styles.userTypeTextActive,
+                ]}
+              >
+                Carrier
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Email</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialIcons
-                name="email"
-                size={20}
-                color="#64748b"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialIcons
-                name="lock"
-                size={20}
-                color="#64748b"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Create a password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity
-                style={styles.passwordToggle}
-                onPress={() => setShowPassword(!showPassword)}
+          <View style={styles.form}>
+            {/* First Name */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>First Name</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  firstNameError ? styles.inputError : null,
+                ]}
               >
                 <MaterialIcons
-                  name={showPassword ? "visibility-off" : "visibility"}
+                  name="person"
                   size={20}
-                  color="#64748b"
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Confirm Password</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialIcons
-                name="lock"
-                size={20}
-                color="#64748b"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showPassword}
-              />
-            </View>
-          </View>
-
-          {userType === "partner" && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Vehicle Type</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons
-                  name="directions-car"
-                  size={20}
-                  color="#64748b"
+                  color={COLORS.SECONDARY}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Car, Bike, Van, etc."
-                  value={vehicleType}
-                  onChangeText={setVehicleType}
+                  placeholder="Enter your first name"
+                  value={firstName}
+                  onChangeText={(text) => {
+                    setFirstName(text);
+                    if (firstNameError) validateFirstName();
+                  }}
+                  onBlur={validateFirstName}
+                  editable={!isLoading}
                 />
               </View>
+              {firstNameError ? (
+                <Text style={styles.errorText}>{firstNameError}</Text>
+              ) : null}
             </View>
-          )}
 
-          <TouchableOpacity
-            style={[
-              styles.registerButton,
-              isLoading && styles.registerButtonDisabled,
-            ]}
-            onPress={handleRegister}
-            disabled={isLoading}
-          >
-            <Text style={styles.registerButtonText}>
-              {isLoading ? "Creating Account..." : "Create Account"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            {/* Last Name */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Last Name</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  lastNameError ? styles.inputError : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="person"
+                  size={20}
+                  color={COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your last name"
+                  value={lastName}
+                  onChangeText={(text) => {
+                    setLastName(text);
+                    if (lastNameError) validateLastName();
+                  }}
+                  onBlur={validateLastName}
+                  editable={!isLoading}
+                />
+              </View>
+              {lastNameError ? (
+                <Text style={styles.errorText}>{lastNameError}</Text>
+              ) : null}
+            </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-            <Text style={styles.signInText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+            {/* Email */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  emailError ? styles.inputError : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="email"
+                  size={20}
+                  color={COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (emailError) validateEmail();
+                  }}
+                  onBlur={validateEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+              </View>
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
+            </View>
+
+            {/* Phone Number */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  phoneError ? styles.inputError : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="phone"
+                  size={20}
+                  color={COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your phone number"
+                  value={phoneNumber}
+                  onChangeText={(text) => {
+                    setPhoneNumber(text);
+                    if (phoneError) validatePhone();
+                  }}
+                  onBlur={validatePhone}
+                  keyboardType="phone-pad"
+                  editable={!isLoading}
+                />
+              </View>
+              {phoneError ? (
+                <Text style={styles.errorText}>{phoneError}</Text>
+              ) : null}
+            </View>
+
+            {/* Password */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  passwordError ? styles.inputError : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color={COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Create a password"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (passwordError) validatePassword();
+                    if (confirmPassword && confirmPasswordError) validateConfirmPassword();
+                  }}
+                  onBlur={validatePassword}
+                  secureTextEntry={!showPassword}
+                  editable={!isLoading}
+                />
+                <TouchableOpacity
+                  style={styles.passwordToggle}
+                  onPress={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                >
+                  <MaterialIcons
+                    name={showPassword ? "visibility-off" : "visibility"}
+                    size={20}
+                    color={COLORS.SECONDARY}
+                  />
+                </TouchableOpacity>
+              </View>
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              ) : null}
+            </View>
+
+            {/* Confirm Password */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Confirm Password</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  confirmPasswordError ? styles.inputError : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color={COLORS.SECONDARY}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (confirmPasswordError) validateConfirmPassword();
+                  }}
+                  onBlur={validateConfirmPassword}
+                  secureTextEntry={!showPassword}
+                  editable={!isLoading}
+                />
+              </View>
+              {confirmPasswordError ? (
+                <Text style={styles.errorText}>{confirmPasswordError}</Text>
+              ) : null}
+            </View>
+
+            {/* Vehicle Type - Only for carrier role */}
+            {role === "carrier" && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Vehicle Type</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    vehicleTypeError ? styles.inputError : null,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="directions-car"
+                    size={20}
+                    color={COLORS.SECONDARY}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Car, Bike, Van, etc."
+                    value={vehicleType}
+                    onChangeText={(text) => {
+                      setVehicleType(text);
+                      if (vehicleTypeError) validateVehicleType();
+                    }}
+                    onBlur={validateVehicleType}
+                    editable={!isLoading}
+                  />
+                </View>
+                {vehicleTypeError ? (
+                  <Text style={styles.errorText}>{vehicleTypeError}</Text>
+                ) : null}
+              </View>
+            )}
+
+            {/* Register Button */}
+            <TouchableOpacity
+              style={[
+                styles.registerButton,
+                isLoading && styles.registerButtonDisabled,
+              ]}
+              onPress={handleRegister}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={COLORS.WHITE} size="small" />
+              ) : (
+                <Text style={styles.registerButtonText}>Create Account</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account?</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Login")}
+              disabled={isLoading}
+            >
+              <Text style={styles.signInText}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -264,7 +549,10 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
+    backgroundColor: COLORS.BACKGROUND,
+  },
+  keyboardAvoidView: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
@@ -272,7 +560,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#2A5D3C",
+    backgroundColor: COLORS.PRIMARY,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.2)",
   },
@@ -282,21 +570,21 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: COLORS.WHITE,
   },
   content: {
     flex: 1,
-    padding: 24,
+    padding: SIZES.PADDING,
   },
   title: {
-    fontSize: 28,
+    fontSize: SIZES.H1,
     fontWeight: "bold",
-    color: "#1e293b",
+    color: COLORS.BLACK,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#64748b",
+    fontSize: SIZES.BODY,
+    color: COLORS.SECONDARY,
     marginBottom: 32,
   },
   userTypeContainer: {
@@ -308,21 +596,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: SIZES.RADIUS,
     marginRight: 12,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
   },
   userTypeButtonActive: {
-    backgroundColor: "#E8F5E0",
+    backgroundColor: COLORS.PRIMARY_LIGHT,
   },
   userTypeText: {
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: SIZES.BODY,
     fontWeight: "500",
-    color: "#64748b",
+    color: COLORS.SECONDARY,
   },
   userTypeTextActive: {
-    color: "#2A5D3C",
+    color: COLORS.PRIMARY,
   },
   form: {
     marginBottom: 24,
@@ -331,19 +619,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: SIZES.BODY,
     fontWeight: "500",
-    color: "#1e293b",
+    color: COLORS.BLACK,
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.WHITE,
     borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 8,
+    borderColor: COLORS.BORDER,
+    borderRadius: SIZES.RADIUS,
     paddingHorizontal: 12,
+  },
+  inputError: {
+    borderColor: COLORS.ERROR,
+  },
+  errorText: {
+    color: COLORS.ERROR,
+    fontSize: SIZES.SMALL,
+    marginTop: 4,
   },
   inputIcon: {
     marginRight: 8,
@@ -351,24 +647,26 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: SIZES.BODY,
   },
   passwordToggle: {
     padding: 8,
   },
   registerButton: {
-    backgroundColor: "#2A5D3C",
-    borderRadius: 8,
+    backgroundColor: COLORS.PRIMARY,
+    borderRadius: SIZES.RADIUS,
     paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
+    height: 50,
   },
   registerButtonDisabled: {
-    backgroundColor: "#94a3b8",
+    backgroundColor: COLORS.DISABLED,
   },
   registerButtonText: {
-    color: "#fff",
-    fontSize: 16,
+    color: COLORS.WHITE,
+    fontSize: SIZES.BODY,
     fontWeight: "600",
   },
   footer: {
@@ -378,12 +676,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   footerText: {
-    color: "#64748b",
-    fontSize: 14,
+    color: COLORS.SECONDARY,
+    fontSize: SIZES.BODY,
   },
   signInText: {
-    color: "#2A5D3C",
-    fontSize: 14,
+    color: COLORS.PRIMARY,
+    fontSize: SIZES.BODY,
     fontWeight: "600",
     marginLeft: 4,
   },
