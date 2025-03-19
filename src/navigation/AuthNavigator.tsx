@@ -3,14 +3,10 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import { AuthStackParamList } from '../types/navigation';
 
-export type AuthStackParamList = {
-  Login: undefined;
-  Register: undefined;
-  ForgotPassword: undefined;
-};
-
-const Stack = createNativeStackNavigator<AuthStackParamList>();
+// Create the stack navigator without type arguments
+const Stack = createNativeStackNavigator();
 
 export default function AuthNavigator() {
   return (

@@ -49,9 +49,6 @@ export default function RegisterScreen() {
     const success = await register(name, email, password, userType);
     setIsLoading(false);
 
-    if (success) {
-      // Registration successful - user is automatically logged in
-    }
   };
 
   return (

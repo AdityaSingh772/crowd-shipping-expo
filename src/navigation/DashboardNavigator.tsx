@@ -6,14 +6,14 @@ import MapScreen from '../screens/dashboard/MapScreen';
 import DeliveriesScreen from '../screens/dashboard/DeliveriesScreen';
 import PaymentsScreen from '../screens/dashboard/PaymentsScreen';
 
-type DashboardTabParamList = {
-  Dashboard: undefined;
-  Map: undefined;
-  Deliveries: undefined;
-  Payments: undefined;
+// Define types for the tab bar icon props
+type TabBarIconProps = {
+  color: string;
+  size: number;
 };
 
-const Tab = createBottomTabNavigator<DashboardTabParamList>();
+// Create the tab navigator without type arguments
+const Tab = createBottomTabNavigator();
 
 export default function DashboardNavigator() {
   return (
@@ -37,10 +37,10 @@ export default function DashboardNavigator() {
       }}
     >
       <Tab.Screen
-        name="Dashboard"
+        name="Home"
         component={DashboardScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: TabBarIconProps) => (
             <MaterialIcons name="dashboard" size={size} color={color} />
           ),
         }}
@@ -49,7 +49,7 @@ export default function DashboardNavigator() {
         name="Map"
         component={MapScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: TabBarIconProps) => (
             <MaterialIcons name="map" size={size} color={color} />
           ),
         }}
@@ -58,7 +58,7 @@ export default function DashboardNavigator() {
         name="Deliveries"
         component={DeliveriesScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: TabBarIconProps) => (
             <MaterialIcons name="local-shipping" size={size} color={color} />
           ),
         }}
@@ -67,7 +67,7 @@ export default function DashboardNavigator() {
         name="Payments"
         component={PaymentsScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: TabBarIconProps) => (
             <MaterialIcons name="payment" size={size} color={color} />
           ),
         }}
