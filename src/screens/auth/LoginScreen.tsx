@@ -1,25 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  TextInput, 
-  Alert, 
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView 
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useAuth } from '../../hooks/useAuth';
-import { UserType } from '../../context/AuthContext';
-import { PATTERNS, VALIDATION, COLORS, SIZES, API_URL } from '../../config/constant';
-import { StatusBar } from 'expo-status-bar';
-import ApiConnectionTest from '../../components/ApiConnectionTest';
+  ScrollView,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useAuth } from "../../hooks/useAuth";
+import { UserType } from "../../context/AuthContext";
+import {
+  PATTERNS,
+  VALIDATION,
+  COLORS,
+  SIZES,
+  API_URL,
+} from "../../config/constant";
+import { StatusBar } from "expo-status-bar";
+import ApiConnectionTest from "../../components/ApiConnectionTest";
 
 type RootStackParamList = {
   Login: undefined;
@@ -28,27 +34,30 @@ type RootStackParamList = {
   Home: undefined;
 };
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Login"
+>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const { login, isAuthenticated } = useAuth();
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [userType, setUserType] = useState<UserType>('user');
+  const [userType, setUserType] = useState<UserType>("user");
   const [isLoading, setIsLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  
+
   // Validation states
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   // Navigate away if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigation.replace('Home');
+      navigation.replace("Home");
     }
   }, [isAuthenticated, navigation]);
 
@@ -61,7 +70,7 @@ export default function LoginScreen() {
       setEmailError(VALIDATION.INVALID_EMAIL);
       return false;
     }
-    setEmailError('');
+    setEmailError("");
     return true;
   };
 
@@ -71,7 +80,7 @@ export default function LoginScreen() {
       setPasswordError(VALIDATION.REQUIRED);
       return false;
     }
-    setPasswordError('');
+    setPasswordError("");
     return true;
   };
 
@@ -79,7 +88,7 @@ export default function LoginScreen() {
     // Validate form
     const isEmailValid = validateEmail();
     const isPasswordValid = validatePassword();
-    
+
     if (!isEmailValid || !isPasswordValid) {
       return;
     }
@@ -87,15 +96,15 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       const success = await login(email, password, userType);
-      
+
       if (!success) {
         // Login failed but no error was thrown (handled in the login function)
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       Alert.alert(
-        'Login Failed', 
-        'An unexpected error occurred. Please check your internet connection and try again.'
+        "Login Failed",
+        "An unexpected error occurred. Please check your internet connection and try again."
       );
     } finally {
       setIsLoading(false);
@@ -107,12 +116,12 @@ export default function LoginScreen() {
   const handleTitlePress = () => {
     const newCount = titleTapCount + 1;
     setTitleTapCount(newCount);
-    
+
     if (newCount >= 5) {
       setShowDebug(!showDebug);
       setTitleTapCount(0);
       Alert.alert(
-        "Debug Mode", 
+        "Debug Mode",
         showDebug ? "Debug mode disabled" : "Debug mode enabled"
       );
     }
@@ -122,12 +131,14 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
-            <Text onPress={handleTitlePress} style={styles.headerTitle}>Crowd Shipping</Text>
+            <Text onPress={handleTitlePress} style={styles.headerTitle}>
+              Crowd Shipping
+            </Text>
           </View>
 
           <View style={styles.content}>
@@ -137,20 +148,22 @@ export default function LoginScreen() {
             <View style={styles.userTypeContainer}>
               <TouchableOpacity
                 style={[
-                  styles.userTypeButton, 
-                  userType === 'user' && styles.userTypeButtonActive
+                  styles.userTypeButton,
+                  userType === "user" && styles.userTypeButtonActive,
                 ]}
-                onPress={() => setUserType('user')}
+                onPress={() => setUserType("user")}
               >
                 <MaterialIcons
                   name="person"
                   size={20}
-                  color={userType === 'user' ? COLORS.PRIMARY : COLORS.SECONDARY}
+                  color={
+                    userType === "user" ? COLORS.PRIMARY : COLORS.SECONDARY
+                  }
                 />
                 <Text
                   style={[
                     styles.userTypeText,
-                    userType === 'user' && styles.userTypeTextActive,
+                    userType === "user" && styles.userTypeTextActive,
                   ]}
                 >
                   User
@@ -159,20 +172,22 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={[
-                  styles.userTypeButton, 
-                  userType === 'partner' && styles.userTypeButtonActive
+                  styles.userTypeButton,
+                  userType === "partner" && styles.userTypeButtonActive,
                 ]}
-                onPress={() => setUserType('partner')}
+                onPress={() => setUserType("partner")}
               >
                 <MaterialIcons
                   name="local-shipping"
                   size={20}
-                  color={userType === 'partner' ? COLORS.PRIMARY : COLORS.SECONDARY}
+                  color={
+                    userType === "partner" ? COLORS.PRIMARY : COLORS.SECONDARY
+                  }
                 />
                 <Text
                   style={[
                     styles.userTypeText,
-                    userType === 'partner' && styles.userTypeTextActive,
+                    userType === "partner" && styles.userTypeTextActive,
                   ]}
                 >
                   Delivery Partner
@@ -183,10 +198,10 @@ export default function LoginScreen() {
             <View style={styles.form}>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Email</Text>
-                <View 
+                <View
                   style={[
                     styles.inputWrapper,
-                    emailError ? styles.inputError : null
+                    emailError ? styles.inputError : null,
                   ]}
                 >
                   <MaterialIcons
@@ -217,10 +232,10 @@ export default function LoginScreen() {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Password</Text>
-                <View 
+                <View
                   style={[
                     styles.inputWrapper,
-                    passwordError ? styles.inputError : null
+                    passwordError ? styles.inputError : null,
                   ]}
                 >
                   <MaterialIcons
@@ -247,7 +262,7 @@ export default function LoginScreen() {
                     disabled={isLoading}
                   >
                     <MaterialIcons
-                      name={showPassword ? 'visibility-off' : 'visibility'}
+                      name={showPassword ? "visibility-off" : "visibility"}
                       size={20}
                       color={COLORS.SECONDARY}
                     />
@@ -260,7 +275,7 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={styles.forgotPassword}
-                onPress={() => navigation.navigate('ForgotPassword')}
+                onPress={() => navigation.navigate("ForgotPassword")}
                 disabled={isLoading}
               >
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
@@ -269,7 +284,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={[
                   styles.loginButton,
-                  isLoading && styles.loginButtonDisabled
+                  isLoading && styles.loginButtonDisabled,
                 ]}
                 onPress={handleLogin}
                 disabled={isLoading}
@@ -284,8 +299,8 @@ export default function LoginScreen() {
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>Don't have an account?</Text>
-              <TouchableOpacity 
-                onPress={() => navigation.navigate('Register')}
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Register")}
                 disabled={isLoading}
               >
                 <Text style={styles.signUpText}>Sign Up</Text>
@@ -307,6 +322,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.BACKGROUND,
@@ -323,11 +343,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.WHITE,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.BORDER,
-    alignItems: 'center',
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.BLACK,
   },
   content: {
@@ -336,7 +356,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: SIZES.H1,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.BLACK,
     marginBottom: 8,
   },
@@ -346,17 +366,17 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   userTypeContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 24,
   },
   userTypeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: SIZES.RADIUS,
     marginRight: 12,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
   },
   userTypeButtonActive: {
     backgroundColor: COLORS.PRIMARY_LIGHT,
@@ -364,7 +384,7 @@ const styles = StyleSheet.create({
   userTypeText: {
     marginLeft: 8,
     fontSize: SIZES.BODY,
-    fontWeight: '500',
+    fontWeight: "500",
     color: COLORS.SECONDARY,
   },
   userTypeTextActive: {
@@ -378,13 +398,13 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: SIZES.BODY,
-    fontWeight: '500',
+    fontWeight: "500",
     color: COLORS.BLACK,
     marginBottom: 8,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.WHITE,
     borderWidth: 1,
     borderColor: COLORS.BORDER,
@@ -411,20 +431,20 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   forgotPassword: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     marginBottom: 24,
   },
   forgotPasswordText: {
     color: COLORS.PRIMARY,
     fontSize: SIZES.BODY,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   loginButton: {
     backgroundColor: COLORS.PRIMARY,
     borderRadius: SIZES.RADIUS,
     paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     height: 50,
   },
   loginButtonDisabled: {
@@ -433,12 +453,12 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: COLORS.WHITE,
     fontSize: SIZES.BODY,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
   },
   footerText: {
     color: COLORS.SECONDARY,
@@ -447,26 +467,26 @@ const styles = StyleSheet.create({
   signUpText: {
     color: COLORS.PRIMARY,
     fontSize: SIZES.BODY,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 4,
   },
   debugContainer: {
     marginTop: 24,
     padding: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
     borderRadius: SIZES.RADIUS,
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: "#e9ecef",
   },
   debugTitle: {
     fontSize: SIZES.H4,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
     color: COLORS.BLACK,
   },
   debugText: {
     fontSize: SIZES.SMALL,
-    fontFamily: 'monospace',
+    fontFamily: "monospace",
     marginBottom: 16,
     color: COLORS.SECONDARY,
   },
