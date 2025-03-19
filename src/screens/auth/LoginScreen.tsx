@@ -1,6 +1,4 @@
-"use client"
-
-import { useState } from "react"
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,182 +6,319 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  StatusBar,
-  Dimensions,
-  ImageBackground,
-} from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { MaterialIcons } from "@expo/vector-icons"
-import { useNavigation } from "@react-navigation/native"
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
-import { useAuth } from "../../hooks/useAuth"
-import type { UserType } from "../../context/AuthContext"
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useAuth } from "../../hooks/useAuth";
+import { UserType } from "../../context/AuthContext";
+import {
+  PATTERNS,
+  VALIDATION,
+  COLORS,
+  SIZES,
+  API_URL,
+} from "../../config/constant";
+import { StatusBar } from "expo-status-bar";
+import ApiConnectionTest from "../../components/ApiConnectionTest";
 
-const { width, height } = Dimensions.get("window")
+type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
+  Home: undefined;
+};
 
-type AuthStackParamList = {
-  Login: undefined
-  Register: undefined
-  ForgotPassword: undefined
-}
-
-type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, "Login">
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Login"
+>;
 
 export default function LoginScreen() {
-  const navigation = useNavigation<LoginScreenNavigationProp>()
-  const { login } = useAuth()
+  const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login, isAuthenticated } = useAuth();
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [userType, setUserType] = useState<UserType>("user")
-  const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [userType, setUserType] = useState<UserType>("user");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
-  // Animation values
-  // const logoOpacity = new Animated.Value(0)
-  // const formTranslateY = new Animated.Value(50)
-  // const formOpacity = new Animated.Value(0)
+  // Validation states
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
-  // useEffect(() => {
-  //   // Animate logo
-  //   Animated.timing(logoOpacity, {
-  //     toValue: 1,
-  //     duration: 1000,
-  //     useNativeDriver: true,
-  //   }).start()
+  // Navigate away if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.replace("Home");
+    }
+  }, [isAuthenticated, navigation]);
 
-  //   // Animate form
-  //   Animated.parallel([
-  //     Animated.timing(formTranslateY, {
-  //       toValue: 0,
-  //       duration: 800,
-  //       delay: 300,
-  //       useNativeDriver: true,
-  //     }),
-  //     Animated.timing(formOpacity, {
-  //       toValue: 1,
-  //       duration: 800,
-  //       delay: 300,
-  //       useNativeDriver: true,
-  //     }),
-  //   ]).start()
-  // }, [])
+  // Validate email
+  const validateEmail = (): boolean => {
+    if (!email) {
+      setEmailError(VALIDATION.REQUIRED);
+      return false;
+    } else if (!PATTERNS.EMAIL.test(email)) {
+      setEmailError(VALIDATION.INVALID_EMAIL);
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  // Validate password
+  const validatePassword = (): boolean => {
+    if (!password) {
+      setPasswordError(VALIDATION.REQUIRED);
+      return false;
+    }
+    setPasswordError("");
+    return true;
+  };
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password")
-      return
+    // Validate form
+    const isEmailValid = validateEmail();
+    const isPasswordValid = validatePassword();
+
+    if (!isEmailValid || !isPasswordValid) {
+      return;
     }
 
-    setIsLoading(true)
-    const success = await login(email, password, userType)
-    setIsLoading(false)
-  }
+    setIsLoading(true);
+    try {
+      const success = await login(email, password, userType);
+
+      if (!success) {
+        // Login failed but no error was thrown (handled in the login function)
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      Alert.alert(
+        "Login Failed",
+        "An unexpected error occurred. Please check your internet connection and try again."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Secret debug mode toggle (tap the title 5 times)
+  const [titleTapCount, setTitleTapCount] = useState(0);
+  const handleTitlePress = () => {
+    const newCount = titleTapCount + 1;
+    setTitleTapCount(newCount);
+
+    if (newCount >= 5) {
+      setShowDebug(!showDebug);
+      setTitleTapCount(0);
+      Alert.alert(
+        "Debug Mode",
+        showDebug ? "Debug mode disabled" : "Debug mode enabled"
+      );
+    }
+  };
 
   return (
-    <ImageBackground source={require("../../../assets/pattern-bg.jpg")} style={styles.backgroundImage}>
-      <SafeAreaView style={styles.container}>
-        <StatusBar backgroundColor="#2A5D3C" barStyle="light-content" />
-        <View style={styles.overlay} />
-
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Shiplancer</Text>
-        </View>
-
-        <View style={styles.content}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to your account</Text>
-
-          <View style={styles.userTypeContainer}>
-            <TouchableOpacity
-              style={[styles.userTypeButton, userType === "user" && styles.userTypeButtonActive]}
-              onPress={() => setUserType("user")}
-            >
-              <MaterialIcons name="person" size={20} color={userType === "user" ? "#2A5D3C" : "#64748b"} />
-              <Text style={[styles.userTypeText, userType === "user" && styles.userTypeTextActive]}>User</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.userTypeButton, userType === "partner" && styles.userTypeButtonActive]}
-              onPress={() => setUserType("partner")}
-            >
-              <MaterialIcons name="local-shipping" size={20} color={userType === "partner" ? "#2A5D3C" : "#64748b"} />
-              <Text style={[styles.userTypeText, userType === "partner" && styles.userTypeTextActive]}>
-                Delivery Partner
-              </Text>
-            </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidView}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text onPress={handleTitlePress} style={styles.headerTitle}>
+              Crowd Shipping
+            </Text>
           </View>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons name="email" size={20} color="#64748b" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholderTextColor="#a3a3a3"
+          <View style={styles.content}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Sign in to your account</Text>
+
+            <View style={styles.userTypeContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.userTypeButton,
+                  userType === "user" && styles.userTypeButtonActive,
+                ]}
+                onPress={() => setUserType("user")}
+              >
+                <MaterialIcons
+                  name="person"
+                  size={20}
+                  color={
+                    userType === "user" ? COLORS.PRIMARY : COLORS.SECONDARY
+                  }
                 />
-              </View>
+                <Text
+                  style={[
+                    styles.userTypeText,
+                    userType === "user" && styles.userTypeTextActive,
+                  ]}
+                >
+                  User
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.userTypeButton,
+                  userType === "partner" && styles.userTypeButtonActive,
+                ]}
+                onPress={() => setUserType("partner")}
+              >
+                <MaterialIcons
+                  name="local-shipping"
+                  size={20}
+                  color={
+                    userType === "partner" ? COLORS.PRIMARY : COLORS.SECONDARY
+                  }
+                />
+                <Text
+                  style={[
+                    styles.userTypeText,
+                    userType === "partner" && styles.userTypeTextActive,
+                  ]}
+                >
+                  Delivery Partner
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialIcons name="lock" size={20} color="#64748b" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  placeholderTextColor="#a3a3a3"
-                />
-                <TouchableOpacity style={styles.passwordToggle} onPress={() => setShowPassword(!showPassword)}>
-                  <MaterialIcons name={showPassword ? "visibility-off" : "visibility"} size={20} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.forgotPassword} onPress={() => navigation.navigate("ForgotPassword")}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <View style={styles.loadingContainer}>
-                  <Text style={styles.loginButtonText}>Signing in</Text>
-                  <View style={styles.loadingDots}>
-                    <View style={styles.loadingDot} />
-                    <View style={[styles.loadingDot, { marginLeft: 4 }]} />
-                    <View style={[styles.loadingDot, { marginLeft: 4 }]} />
-                  </View>
+            <View style={styles.form}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    emailError ? styles.inputError : null,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="email"
+                    size={20}
+                    color={COLORS.SECONDARY}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email"
+                    value={email}
+                    onChangeText={(text) => {
+                      setEmail(text);
+                      if (emailError) validateEmail();
+                    }}
+                    onBlur={validateEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isLoading}
+                  />
                 </View>
-              ) : (
-                <Text style={styles.loginButtonText}>{isLoading ? "Signing in..." : "Sign In"}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+                {emailError ? (
+                  <Text style={styles.errorText}>{emailError}</Text>
+                ) : null}
+              </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-              <Text style={styles.signUpText}>Sign Up</Text>
-            </TouchableOpacity>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    passwordError ? styles.inputError : null,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="lock"
+                    size={20}
+                    color={COLORS.SECONDARY}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (passwordError) validatePassword();
+                    }}
+                    onBlur={validatePassword}
+                    secureTextEntry={!showPassword}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    style={styles.passwordToggle}
+                    onPress={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
+                  >
+                    <MaterialIcons
+                      name={showPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color={COLORS.SECONDARY}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {passwordError ? (
+                  <Text style={styles.errorText}>{passwordError}</Text>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={() => navigation.navigate("ForgotPassword")}
+                disabled={isLoading}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.loginButton,
+                  isLoading && styles.loginButtonDisabled,
+                ]}
+                onPress={handleLogin}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={COLORS.WHITE} size="small" />
+                ) : (
+                  <Text style={styles.loginButtonText}>Sign In</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account?</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Register")}
+                disabled={isLoading}
+              >
+                <Text style={styles.signUpText}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showDebug && (
+              <View style={styles.debugContainer}>
+                <Text style={styles.debugTitle}>Debug Information</Text>
+                <Text style={styles.debugText}>API URL: {API_URL}</Text>
+                <ApiConnectionTest />
+              </View>
+            )}
           </View>
-        </View>
-      </SafeAreaView>
-    </ImageBackground>
-  )
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -194,37 +329,40 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: "rgba(42, 93, 60, 0.85)",
+    backgroundColor: COLORS.BACKGROUND,
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(42, 93, 60, 0)",
+  keyboardAvoidView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
+    backgroundColor: COLORS.WHITE,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER,
     alignItems: "center",
-    zIndex: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#fff",
+    color: COLORS.BLACK,
   },
   content: {
     flex: 1,
-    padding: 24,
-    zIndex: 1,
+    padding: SIZES.PADDING,
   },
   title: {
-    fontSize: 28,
+    fontSize: SIZES.H1,
     fontWeight: "bold",
-    color: "#fff",
+    color: COLORS.BLACK,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: SIZES.BODY,
+    color: COLORS.SECONDARY,
     marginBottom: 32,
   },
   userTypeContainer: {
@@ -236,21 +374,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: SIZES.RADIUS,
     marginRight: 12,
     backgroundColor: "rgba(255, 255, 255, 0.9)",
   },
   userTypeButtonActive: {
-    backgroundColor: "#E8F5E0",
+    backgroundColor: COLORS.PRIMARY_LIGHT,
   },
   userTypeText: {
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: SIZES.BODY,
     fontWeight: "500",
-    color: "#64748b",
+    color: COLORS.SECONDARY,
   },
   userTypeTextActive: {
-    color: "#2A5D3C",
+    color: COLORS.PRIMARY,
   },
   form: {
     marginBottom: 24,
@@ -259,19 +397,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: SIZES.BODY,
     fontWeight: "500",
-    color: "#fff",
+    color: COLORS.BLACK,
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.WHITE,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 8,
+    borderColor: COLORS.BORDER,
+    borderRadius: SIZES.RADIUS,
     paddingHorizontal: 12,
+  },
+  inputError: {
+    borderColor: COLORS.ERROR,
+  },
+  errorText: {
+    color: COLORS.ERROR,
+    fontSize: SIZES.SMALL,
+    marginTop: 4,
   },
   inputIcon: {
     marginRight: 8,
@@ -279,8 +425,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingVertical: 12,
-    fontSize: 16,
-    color: "#1e293b",
+    fontSize: SIZES.BODY,
   },
   passwordToggle: {
     padding: 8,
@@ -290,38 +435,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: "#fff",
-    fontSize: 14,
+    color: COLORS.PRIMARY,
+    fontSize: SIZES.BODY,
     fontWeight: "500",
   },
   loginButton: {
-    backgroundColor: "#8CD867",
-    borderRadius: 8,
+    backgroundColor: COLORS.PRIMARY,
+    borderRadius: SIZES.RADIUS,
     paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
+    height: 50,
   },
   loginButtonDisabled: {
-    backgroundColor: "rgba(148, 163, 184, 0.7)",
+    backgroundColor: COLORS.DISABLED,
   },
   loginButtonText: {
-    color: "#fff",
-    fontSize: 16,
+    color: COLORS.WHITE,
+    fontSize: SIZES.BODY,
     fontWeight: "600",
-    marginRight: 8,
-  },
-  loadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  loadingDots: {
-    flexDirection: "row",
-    marginLeft: 4,
-  },
-  loadingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#fff",
   },
   footer: {
     flexDirection: "row",
@@ -329,14 +461,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   footerText: {
-    color: "#fff",
-    fontSize: 14,
+    color: COLORS.SECONDARY,
+    fontSize: SIZES.BODY,
   },
   signUpText: {
-    color: "#8CD867",
-    fontSize: 14,
+    color: COLORS.PRIMARY,
+    fontSize: SIZES.BODY,
     fontWeight: "600",
     marginLeft: 4,
   },
-})
-
+  debugContainer: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: "#f8f9fa",
+    borderRadius: SIZES.RADIUS,
+    borderWidth: 1,
+    borderColor: "#e9ecef",
+  },
+  debugTitle: {
+    fontSize: SIZES.H4,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: COLORS.BLACK,
+  },
+  debugText: {
+    fontSize: SIZES.SMALL,
+    fontFamily: "monospace",
+    marginBottom: 16,
+    color: COLORS.SECONDARY,
+  },
+});

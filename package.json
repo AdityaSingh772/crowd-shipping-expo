@@ -17,6 +17,7 @@
     "@react-navigation/native-stack": "^7.2.1",
     "@rnmapbox/maps": "^10.1.37",
     "async-storage": "^0.1.0",
+    "axios": "^1.8.3",
     "dotenv": "^16.4.7",
     "expo": "^52.0.39",
     "expo-location": "18.0.8",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@types/axios": "^0.14.4",
     "@types/react": "~18.3.12",
     "typescript": "^5.3.3"
   },

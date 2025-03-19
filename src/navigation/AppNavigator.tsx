@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import AuthNavigator from './AuthNavigator';
 import DashboardNavigator from './DashboardNavigator';
 import DeliveryPartnerDashboardScreen from '../screens/delivery-partner/delivery-partner-dashboard-screen';
@@ -10,8 +10,8 @@ import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
 import { useAuth } from '../hooks/useAuth';
 import { RootStackParamList } from '../types/navigation';
 
-// Create the stack navigator with the correct type
-const Stack = createNativeStackNavigator<RootStackParamList>();
+// Create the stack navigator without type arguments
+const Stack = createNativeStackNavigator();
 
 // Loading screen component
 function LoadingScreen() {
@@ -23,7 +23,7 @@ function LoadingScreen() {
 }
 
 export default function AppNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, userType } = useAuth();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -59,7 +59,7 @@ export default function AppNavigator() {
   }
 
   // For debugging
-  console.log('Current user type:', user?.userType);
+  console.log('Current user type:', userType);
 
   return (
     <NavigationContainer>
@@ -71,7 +71,7 @@ export default function AppNavigator() {
             initialParams={{ onComplete: handleOnboardingComplete }}
           />
         ) : user ? (
-          user.userType === 'partner' ? (
+          userType === 'partner' ? (
             // Delivery partner sees their dedicated dashboard
             <Stack.Screen name="DeliveryPartnerDashboard" component={DeliveryPartnerDashboardScreen} />
           ) : (
