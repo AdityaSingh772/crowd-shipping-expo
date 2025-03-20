@@ -21,4 +21,5 @@ export type DashboardTabParamList = {
   Deliveries: undefined;
   Payments: undefined;
   OrderAssignment: undefined; 
+  Match: undefined;
 };

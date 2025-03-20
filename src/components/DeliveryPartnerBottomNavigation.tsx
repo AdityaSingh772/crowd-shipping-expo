@@ -12,9 +12,8 @@ export default function DeliveryPartnerBottomNavigation({
 }: DeliveryPartnerBottomNavigationProps) {
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
-    { id: "orders", label: "Orders", icon: "assignment" },
     { id: "tracking", label: "Tracking", icon: "map" },
-    { id: "payments", label: "Payments", icon: "account-balance-wallet" },
+    { id: "carrier-match", label: "Matching", icon: "map" },
   ]
 
   return (

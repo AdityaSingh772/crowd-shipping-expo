@@ -1,7 +1,7 @@
 // src/config/constant.ts
 
 // API Configuration
-export const API_URL = 'http://192.168.244.163:5001'; // Your backend server address
+export const API_URL = 'http://192.168.43.96:5001'; // Your backend server address
 export const GOOGLE_MAPS_API_KEY = 'AIzaSyCWccCdcc_GtrsBoM_3oz5luJpYyc9mweg'; // Replace with your actual API key
 
 // Colors
