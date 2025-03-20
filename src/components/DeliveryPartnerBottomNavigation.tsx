@@ -13,8 +13,7 @@ export default function DeliveryPartnerBottomNavigation({
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "dashboard" },
     { id: "tracking", label: "Tracking", icon: "map" },
-    { id: "match", label: "Match", icon: "map" },
-    { id: "payments", label: "Payments", icon: "account-balance-wallet" },
+    { id: "carrier-match", label: "Matching", icon: "map" },
   ]
 
   return (

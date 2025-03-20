@@ -8,6 +8,7 @@ import TrackingScreen from './tracking-screen';
 import PaymentScreen from './payment-screen';
 import DeliveryPartnerBottomNavigation from '../../components/DeliveryPartnerBottomNavigation';
 import {MatchScreen} from './match-screen';
+import CarrierMatchingDashboard from './carrier-matching';
 
 // Create a simple dashboard screen for delivery partners
 function PartnerDashboardHomeScreen() {
@@ -96,7 +97,7 @@ export default function DeliveryPartnerDashboardScreen() {
         {activeTab === 'dashboard' && <PartnerDashboardHomeScreen />}
         {activeTab === 'match' && <MatchScreen />}
         {activeTab === 'tracking' && <TrackingScreen />}
-        {activeTab === 'payments' && <PaymentScreen />}
+        {activeTab === 'carrier-matching' && <CarrierMatchingDashboard />}
       </View>
 
       <DeliveryPartnerBottomNavigation
