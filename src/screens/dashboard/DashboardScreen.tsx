@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { useAuth } from "../../hooks/useAuth"
 import { useTracking } from "../../hooks/useTracking"
 import { Card } from "../../components/Card"
 import { PieChart } from 'react-native-chart-kit'
+import axios from 'axios'
 
 // Package status enum (matches backend)
 enum PackageStatus {
@@ -72,6 +73,15 @@ interface Package {
   carrierId?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Carbon emission stats interface
+interface EmissionStats {
+  carbonReduced: number;
+  treesEquivalent: number;
+  trips: number;
+  traditionalEmissions: number;
+  avgUserEmissions: number;
 }
 
 // Status mapping for UI display
@@ -235,11 +245,14 @@ const TimelineEvent = ({
   </View>
 )
 
+// The API base URL - replace with your actual API URL
+const API_BASE_URL = 'https://api.yourapp.com'; // Update with your API URL
+
 export default function DashboardScreen() {
   const { user, logout } = useAuth()
   const { 
-    loading, 
-    error, 
+    loading: trackingLoading, 
+    error: trackingError, 
     trackingResult, 
     trackPackage, 
     clearTracking,
@@ -255,6 +268,8 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [trackingNumber, setTrackingNumber] = useState("")
   const [showTrackingDetails, setShowTrackingDetails] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   // Activity and statistics
   const [stats, setStats] = useState({
@@ -288,15 +303,75 @@ export default function DashboardScreen() {
   ])
   
   // Environmental impact state
-  const [environmentalStats, setEnvironmentalStats] = useState({
-    carbonReduced: 145, // kg of CO2
-    treesEquivalent: 10,
-    trips: 24
+  const [environmentalStats, setEnvironmentalStats] = useState<EmissionStats>({
+    carbonReduced: 0,
+    treesEquivalent: 0,
+    trips: 0,
+    traditionalEmissions: 250,
+    avgUserEmissions: 100
   });
 
-  // Pie chart configuration
-  const screenWidth = Dimensions.get('window').width - 40;
+  // Fetching carrier emission stats
+  const fetchEmissionStats = useCallback(async () => {
+    if (!user?.id) return;
+    
+    // Only fetch for carriers or if a specific role needs this data
+    const shouldFetchStats = user.role === 'carrier' || user.role === 'customer';
+    
+    if (!shouldFetchStats) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await axios.get(`${API_BASE_URL}/carbon-emission/carrier/${user.id}`);
+      
+      if (response.data.success) {
+        const statsData = response.data.data;
+        
+        setEnvironmentalStats({
+          carbonReduced: statsData.carbonReduced || 0,
+          treesEquivalent: statsData.treesEquivalent || 0,
+          trips: statsData.completedDeliveries || 0,
+          traditionalEmissions: statsData.traditionalEmissions || 250,
+          avgUserEmissions: statsData.avgUserEmissions || 100
+        });
+      } else {
+        // Handle API success: false response
+        setError(response.data.message || 'Failed to load emission data');
+        
+        // Set default values if API returns error
+        setEnvironmentalStats({
+          carbonReduced: 0,
+          treesEquivalent: 0,
+          trips: 0,
+          traditionalEmissions: 250,
+          avgUserEmissions: 100
+        });
+      }
+    } catch (err: any) {
+      console.error('Error fetching emission stats:', err);
+      setError(err.message || 'Failed to load emission data');
+      
+      // Set default values if API throws error
+      setEnvironmentalStats({
+        carbonReduced: 0,
+        treesEquivalent: 0,
+        trips: 0,
+        traditionalEmissions: 250,
+        avgUserEmissions: 100
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, user?.role]);
 
+  // Initial data loading
+  useEffect(() => {
+    fetchEmissionStats();
+  }, [fetchEmissionStats]);
+
+  // Calculate pie chart data based on environmental stats
   const carbonEmissionData = [
     {
       name: 'Saved',
@@ -307,20 +382,22 @@ export default function DashboardScreen() {
     },
     {
       name: 'Avg User',
-      population: 100,
+      population: environmentalStats.avgUserEmissions,
       color: '#8CD867',
       legendFontColor: '#7F7F7F',
       legendFontSize: 12
     },
     {
       name: 'Traditional',
-      population: 250,
+      population: environmentalStats.traditionalEmissions,
       color: '#B5EAD7',
       legendFontColor: '#7F7F7F',
       legendFontSize: 12
     }
   ];
 
+  // Pie chart configuration
+  const screenWidth = Dimensions.get('window').width - 40;
   const chartConfig = {
     backgroundGradientFrom: '#FFFFFF',
     backgroundGradientTo: '#FFFFFF',
@@ -330,31 +407,31 @@ export default function DashboardScreen() {
     useShadowColorFromDataset: false
   };
 
-  const isDeliveryPartner = user?.role === "carrier"
+  const isDeliveryPartner = user?.role === "carrier";
    
-
-   // Handle refresh - clear tracking state
-   const handleRefresh = () => {
+  // Handle refresh - clear tracking state and fetch latest data
+  const handleRefresh = useCallback(() => {
     clearTracking();
     setTrackingNumber("");
     setShowTrackingDetails(false);
-
-    
-  }
+  }, [clearTracking]);
 
   // Handle refresh
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true)
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
     
     // Reset tracking state
-    handleRefresh()
+    handleRefresh();
     
-    // Fetch latest activity data
-    // This would be an API call in a real app
-    setTimeout(() => {
-      setRefreshing(false)
-    }, 1000)
-  }, [handleRefresh])
+    // Fetch latest data
+    Promise.all([
+      fetchEmissionStats()
+    ]).finally(() => {
+      setTimeout(() => {
+        setRefreshing(false);
+      }, 1000);
+    });
+  }, [handleRefresh, fetchEmissionStats]);
 
   // Handle logout
   const handleLogout = () => {
@@ -368,8 +445,8 @@ export default function DashboardScreen() {
         onPress: () => logout(),
         style: "destructive",
       },
-    ])
-  }
+    ]);
+  };
 
   // Handle package tracking
   const handleSearch = async () => {
@@ -384,15 +461,14 @@ export default function DashboardScreen() {
     } catch (err: any) {
       Alert.alert("Error", err.message);
     }
-  }
+  };
 
   // Close tracking details
   const closeTrackingDetails = () => {
     setShowTrackingDetails(false);
     // Don't clear the result immediately to avoid flickering
-  }
+  };
   
- 
   // Render tracking input card
   const renderTrackingInput = () => (
     <Card style={styles.trackingCard}>
@@ -408,20 +484,20 @@ export default function DashboardScreen() {
           placeholderTextColor="#a3a3a3"
         />
         <TouchableOpacity 
-          style={[styles.searchButton, loading && styles.searchButtonDisabled]} 
+          style={[styles.searchButton, trackingLoading && styles.searchButtonDisabled]} 
           onPress={handleSearch}
-          disabled={loading}
+          disabled={trackingLoading}
         >
-          {loading ? (
+          {trackingLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <MaterialIcons name="search" size={24} color="#fff" />
           )}
         </TouchableOpacity>
       </View>
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {trackingError && <Text style={styles.errorText}>{trackingError}</Text>}
     </Card>
-  )
+  );
 
   // Render tracking result card
   const renderTrackingResult = () => {
@@ -571,37 +647,31 @@ export default function DashboardScreen() {
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#2A5D3C" barStyle="light-content" />
-
-      {/* Top bar with logout */}
-      <View style={styles.topBar}>
-        <View>
-          <Text style={styles.greeting}>Welcome back,</Text>
-          <Text style={styles.userName}>{user?.firstName || "Paul Smithers"}</Text>
-        </View>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <MaterialIcons name="logout" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.profileButton}>
-            <MaterialIcons name="account-circle" size={40} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#8CD867"]} />}
-      >
-        {/* Package Tracking Section */}
-        {showTrackingDetails ? renderTrackingResult() : renderTrackingInput()}
-
-        {/* Environmental Impact Section */}
-        <View style={styles.environmentalContainer}>
-          <Text style={styles.sectionTitle}>Your Environmental Impact</Text>
-          <Card style={styles.environmentalCard}>
+  // Render environmental impact section
+  const renderEnvironmentalImpact = () => (
+    <View style={styles.environmentalContainer}>
+      <Text style={styles.sectionTitle}>Your Environmental Impact</Text>
+      <Card style={styles.environmentalCard}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2A5D3C" />
+            <Text style={styles.loadingText}>Loading environmental data...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="error-outline" size={40} color="#991b1b" />
+            <Text style={styles.errorMessage}>
+              Couldn't load environmental data. Please try again later.
+            </Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={fetchEmissionStats}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
             <Text style={styles.environmentalTitle}>
               You've reduced carbon emissions by:
             </Text>
@@ -638,8 +708,41 @@ export default function DashboardScreen() {
                 </Text>
               </View>
             </View>
-          </Card>
+          </>
+        )}
+      </Card>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor="#2A5D3C" barStyle="light-content" />
+
+      {/* Top bar with logout */}
+      <View style={styles.topBar}>
+        <View>
+          <Text style={styles.greeting}>Welcome back,</Text>
+          <Text style={styles.userName}>{user?.firstName || "Paul Smithers"}</Text>
         </View>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <MaterialIcons name="logout" size={24} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.profileButton}>
+            <MaterialIcons name="account-circle" size={40} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#8CD867"]} />}
+      >
+        {/* Package Tracking Section */}
+        {showTrackingDetails ? renderTrackingResult() : renderTrackingInput()}
+
+        {/* Environmental Impact Section */}
+        {renderEnvironmentalImpact()}
 
         {/* Recent Activity */}
         <View style={styles.recentActivityContainer}>
@@ -731,6 +834,40 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
   },
+  // Loading and Error States
+  loadingContainer: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#2A5D3C",
+    fontSize: 14,
+  },
+  errorContainer: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorMessage: {
+    marginTop: 15,
+    marginBottom: 15,
+    color: "#991b1b",
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: "#8CD867",
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  // Tracking card styles
   trackingCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
