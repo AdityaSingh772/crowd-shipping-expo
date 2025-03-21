@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import {
   View,
   Text,
@@ -11,11 +11,143 @@ import {
   Alert,
   TextInput,
   StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons"
 import { useAuth } from "../../hooks/useAuth"
+import { useTracking } from "../../hooks/useTracking"
 import { Card } from "../../components/Card"
+import { PieChart } from 'react-native-chart-kit'
+
+// Package status enum (matches backend)
+enum PackageStatus {
+  PENDING = 'pending',
+  MATCHED = 'matched',
+  PICKUP_READY = 'pickup_ready',
+  IN_TRANSIT = 'in_transit',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+  RETURNED = 'returned',
+}
+
+// Package size enum (matches backend)
+enum PackageSize {
+  SMALL = 'small',
+  MEDIUM = 'medium',
+  LARGE = 'large',
+  EXTRA_LARGE = 'extra_large',
+}
+
+// Package interface
+interface Package {
+  id: string;
+  title: string;
+  description?: string;
+  size: PackageSize;
+  weight: number;
+  isFragile: boolean;
+  requireSignature: boolean;
+  status: PackageStatus;
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  pickupContactName: string;
+  pickupContactPhone: string;
+  pickupTimeWindow: string;
+  deliveryAddress: string;
+  deliveryLatitude: number;
+  deliveryLongitude: number;
+  deliveryContactName: string;
+  deliveryContactPhone: string;
+  deliveryTimeWindow: string;
+  trackingCode: string;
+  distance: number;
+  isInsured: boolean;
+  price: number;
+  pickupTime?: string;
+  deliveryTime?: string;
+  estimatedDeliveryTime?: string;
+  carrierId?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Status mapping for UI display
+const statusInfo = {
+  [PackageStatus.PENDING]: {
+    label: "Pending",
+    color: "#fef9c3",
+    textColor: "#854d0e",
+    icon: <MaterialIcons name="pending-actions" size={24} color="#854d0e" />,
+    description: "Your package is pending carrier assignment.",
+  },
+  [PackageStatus.MATCHED]: {
+    label: "Matched",
+    color: "#dbeafe",
+    textColor: "#1e40af",
+    icon: <MaterialIcons name="people" size={24} color="#1e40af" />,
+    description: "Your package has been matched with a carrier.",
+  },
+  [PackageStatus.PICKUP_READY]: {
+    label: "Ready for Pickup",
+    color: "#dbeafe",
+    textColor: "#1e40af",
+    icon: <MaterialIcons name="local-shipping" size={24} color="#1e40af" />,
+    description: "Your package is ready for pickup by the carrier.",
+  },
+  [PackageStatus.IN_TRANSIT]: {
+    label: "In Transit",
+    color: "#dbeafe",
+    textColor: "#1e40af",
+    icon: <FontAwesome5 name="truck" size={20} color="#1e40af" />,
+    description: "Your package is on its way to the destination.",
+  },
+  [PackageStatus.DELIVERED]: {
+    label: "Delivered",
+    color: "#dcfce7",
+    textColor: "#166534",
+    icon: <MaterialIcons name="check-circle" size={24} color="#166534" />,
+    description: "Your package has been delivered successfully.",
+  },
+  [PackageStatus.CANCELLED]: {
+    label: "Cancelled",
+    color: "#fee2e2",
+    textColor: "#991b1b",
+    icon: <MaterialIcons name="cancel" size={24} color="#991b1b" />,
+    description: "This delivery has been cancelled.",
+  },
+  [PackageStatus.RETURNED]: {
+    label: "Returned",
+    color: "#fee2e2",
+    textColor: "#991b1b",
+    icon: <MaterialIcons name="assignment-return" size={24} color="#991b1b" />,
+    description: "Your package has been returned to sender.",
+  },
+};
+
+// Format date from string or Date object
+const formatDate = (date?: string): string => {
+  if (!date) return "Not available";
+  const dateObj = new Date(date);
+  return dateObj.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+// Calculate progress based on status
+const getProgressPercentage = (status: PackageStatus): number => {
+  const statusValues = Object.values(PackageStatus);
+  const currentIndex = statusValues.indexOf(status);
+  // Exclude CANCELLED and RETURNED from calculation
+  const maxIndex = statusValues.length - 3; // -3 for CANCELLED, RETURNED, and 0-indexing
+  return Math.min(100, Math.round((currentIndex / maxIndex) * 100));
+};
 
 type StatisticProps = {
   title: string
@@ -81,26 +213,150 @@ const ActivityItem = ({ title, time, status, icon }: ActivityItemProps) => (
   </View>
 )
 
+const TimelineEvent = ({ 
+  title, 
+  time, 
+  icon, 
+  isActive 
+}: { 
+  title: string; 
+  time: string; 
+  icon: React.ReactNode; 
+  isActive: boolean;
+}) => (
+  <View style={[styles.timelineEvent, { opacity: isActive ? 1 : 0.5 }]}>
+    <View style={styles.timelineIconContainer}>
+      {icon}
+    </View>
+    <View style={styles.timelineContent}>
+      <Text style={styles.timelineTitle}>{title}</Text>
+      <Text style={styles.timelineTime}>{time}</Text>
+    </View>
+  </View>
+)
+
 export default function DashboardScreen() {
   const { user, logout } = useAuth()
+  const { 
+    loading, 
+    error, 
+    trackingResult, 
+    trackPackage, 
+    clearTracking,
+    recentSearches,
+    refreshPackageStatus,
+    clearTrackingHistory 
+  } = useTracking({ 
+    userId: user?.id, 
+    userRole: user?.role 
+  })
+  
+  // State
   const [refreshing, setRefreshing] = useState(false)
   const [trackingNumber, setTrackingNumber] = useState("")
+  const [showTrackingDetails, setShowTrackingDetails] = useState(false)
+  
+  // Activity and statistics
   const [stats, setStats] = useState({
     deliveries: "24",
     active: "3",
     earnings: "$342",
   })
+  
+  const [recentActivity, setRecentActivity] = useState([
+    {
+      id: '1001',
+      title: "Order #1001 Delivered",
+      time: "2 hours ago",
+      status: "completed" as const,
+      icon: <FontAwesome5 name="box" size={16} color="#2A5D3C" />
+    },
+    {
+      id: '1002',
+      title: "Order #1002 In Transit",
+      time: "Yesterday",
+      status: "in-progress" as const,
+      icon: <FontAwesome5 name="truck" size={16} color="#2A5D3C" />
+    },
+    {
+      id: '1003',
+      title: "Order #1003 Accepted",
+      time: "2 days ago",
+      status: "pending" as const,
+      icon: <MaterialIcons name="pending-actions" size={16} color="#2A5D3C" />
+    }
+  ])
+  
+  // Environmental impact state
+  const [environmentalStats, setEnvironmentalStats] = useState({
+    carbonReduced: 145, // kg of CO2
+    treesEquivalent: 10,
+    trips: 24
+  });
 
-  const isDeliveryPartner = user?.userType === "partner"
+  // Pie chart configuration
+  const screenWidth = Dimensions.get('window').width - 40;
 
+  const carbonEmissionData = [
+    {
+      name: 'Saved',
+      population: environmentalStats.carbonReduced,
+      color: '#4CAF50',
+      legendFontColor: '#7F7F7F',
+      legendFontSize: 12
+    },
+    {
+      name: 'Avg User',
+      population: 100,
+      color: '#8CD867',
+      legendFontColor: '#7F7F7F',
+      legendFontSize: 12
+    },
+    {
+      name: 'Traditional',
+      population: 250,
+      color: '#B5EAD7',
+      legendFontColor: '#7F7F7F',
+      legendFontSize: 12
+    }
+  ];
+
+  const chartConfig = {
+    backgroundGradientFrom: '#FFFFFF',
+    backgroundGradientTo: '#FFFFFF',
+    color: (opacity = 1) => `rgba(42, 93, 60, ${opacity})`,
+    strokeWidth: 2,
+    barPercentage: 0.5,
+    useShadowColorFromDataset: false
+  };
+
+  const isDeliveryPartner = user?.role === "carrier"
+   
+
+   // Handle refresh - clear tracking state
+   const handleRefresh = () => {
+    clearTracking();
+    setTrackingNumber("");
+    setShowTrackingDetails(false);
+
+    
+  }
+
+  // Handle refresh
   const onRefresh = React.useCallback(() => {
     setRefreshing(true)
-    // Simulate fetching data
+    
+    // Reset tracking state
+    handleRefresh()
+    
+    // Fetch latest activity data
+    // This would be an API call in a real app
     setTimeout(() => {
       setRefreshing(false)
     }, 1000)
-  }, [])
+  }, [handleRefresh])
 
+  // Handle logout
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       {
@@ -115,14 +371,205 @@ export default function DashboardScreen() {
     ])
   }
 
-  const handleSearch = () => {
-    if (trackingNumber.trim()) {
-      // Handle tracking search
-      Alert.alert("Tracking", `Searching for package: ${trackingNumber}`)
-    } else {
-      Alert.alert("Error", "Please enter a tracking number")
+  // Handle package tracking
+  const handleSearch = async () => {
+    if (!trackingNumber.trim()) {
+      Alert.alert("Error", "Please enter a tracking number");
+      return;
+    }
+    
+    try {
+      await trackPackage(trackingNumber);
+      setShowTrackingDetails(true);
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
     }
   }
+
+  // Close tracking details
+  const closeTrackingDetails = () => {
+    setShowTrackingDetails(false);
+    // Don't clear the result immediately to avoid flickering
+  }
+  
+ 
+  // Render tracking input card
+  const renderTrackingInput = () => (
+    <Card style={styles.trackingCard}>
+      <Text style={styles.trackingTitle}>Track your package</Text>
+      <Text style={styles.trackingSubtitle}>Enter your package tracking number</Text>
+
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Enter tracking number"
+          value={trackingNumber}
+          onChangeText={setTrackingNumber}
+          placeholderTextColor="#a3a3a3"
+        />
+        <TouchableOpacity 
+          style={[styles.searchButton, loading && styles.searchButtonDisabled]} 
+          onPress={handleSearch}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <MaterialIcons name="search" size={24} color="#fff" />
+          )}
+        </TouchableOpacity>
+      </View>
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </Card>
+  )
+
+  // Render tracking result card
+  const renderTrackingResult = () => {
+    if (!trackingResult) return null;
+    
+    const pkg = trackingResult;
+    const status = statusInfo[pkg.status] || statusInfo[PackageStatus.PENDING];
+    const progressPercentage = getProgressPercentage(pkg.status);
+
+    return (
+      <Card style={styles.trackingResultCard}>
+        <View style={styles.trackingResultHeader}>
+          <Text style={styles.trackingResultTitle}>Package Details</Text>
+          <TouchableOpacity onPress={closeTrackingDetails} style={styles.closeButton}>
+            <MaterialIcons name="close" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.trackingResultContent}>
+          {/* Tracking number and status */}
+          <View style={styles.trackingHeader}>
+            <View>
+              <Text style={styles.trackingLabel}>Tracking Number</Text>
+              <Text style={styles.trackingNumber}>{pkg.trackingCode}</Text>
+            </View>
+            <View
+              style={[styles.statusBadge, { backgroundColor: status.color }]}
+            >
+              <Text style={[styles.statusText, { color: status.textColor }]}>
+                {status.label}
+              </Text>
+            </View>
+          </View>
+
+          {/* Progress visualization */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${progressPercentage}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>{status.description}</Text>
+          </View>
+
+          {/* Package info */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Package Information</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Package Title</Text>
+              <Text style={styles.infoValue}>{pkg.title}</Text>
+            </View>
+            {pkg.description && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.infoValue}>{pkg.description}</Text>
+              </View>
+            )}
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Size</Text>
+              <Text style={styles.infoValue}>{pkg.size}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Weight</Text>
+              <Text style={styles.infoValue}>{pkg.weight} kg</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Fragile</Text>
+              <Text style={styles.infoValue}>{pkg.isFragile ? "Yes" : "No"}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Insured</Text>
+              <Text style={styles.infoValue}>{pkg.isInsured ? "Yes" : "No"}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Signature Required</Text>
+              <Text style={styles.infoValue}>
+                {pkg.requireSignature ? "Yes" : "No"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Delivery details */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Details</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Pickup From</Text>
+              <Text style={styles.infoValue}>{pkg.pickupAddress}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Deliver To</Text>
+              <Text style={styles.infoValue}>{pkg.deliveryAddress}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Estimated Delivery</Text>
+              <Text style={styles.infoValue}>
+                {formatDate(pkg.estimatedDeliveryTime)}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Distance</Text>
+              <Text style={styles.infoValue}>{pkg.distance} km</Text>
+            </View>
+          </View>
+
+          {/* Timeline events */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Timeline</Text>
+            <View style={styles.timeline}>
+              <TimelineEvent
+                title="Package Created"
+                time={formatDate(pkg.createdAt)}
+                icon={<MaterialIcons name="add-box" size={20} color={pkg.createdAt ? "#2A5D3C" : "#a3a3a3"} />}
+                isActive={true}
+              />
+
+              <TimelineEvent
+                title="Carrier Matched"
+                time={pkg.carrierId ? formatDate(pkg.updatedAt) : "Pending"}
+                icon={<MaterialIcons name="people" size={20} color={pkg.carrierId ? "#2A5D3C" : "#a3a3a3"} />}
+                isActive={Boolean(pkg.carrierId)}
+              />
+
+              <TimelineEvent
+                title="Package Picked Up"
+                time={pkg.pickupTime ? formatDate(pkg.pickupTime) : "Pending"}
+                icon={<FontAwesome5 name="truck" size={16} color={pkg.pickupTime ? "#2A5D3C" : "#a3a3a3"} />}
+                isActive={Boolean(pkg.pickupTime)}
+              />
+
+              <TimelineEvent
+                title="Package Delivered"
+                time={pkg.deliveryTime ? formatDate(pkg.deliveryTime) : "Pending"}
+                icon={<MaterialIcons name="check-circle" size={20} color={pkg.deliveryTime ? "#2A5D3C" : "#a3a3a3"} />}
+                isActive={Boolean(pkg.deliveryTime)}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.supportButton}>
+            <Text style={styles.supportButtonText}>Contact Support</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -132,7 +579,7 @@ export default function DashboardScreen() {
       <View style={styles.topBar}>
         <View>
           <Text style={styles.greeting}>Welcome back,</Text>
-          <Text style={styles.userName}>{user?.name || "Paul Smithers"}</Text>
+          <Text style={styles.userName}>{user?.firstName || "Paul Smithers"}</Text>
         </View>
         <View style={styles.headerButtons}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -148,100 +595,65 @@ export default function DashboardScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#8CD867"]} />}
       >
-        {/* Tracking Card */}
-        <Card style={styles.trackingCard}>
-          <Text style={styles.trackingTitle}>Track your package</Text>
-          <Text style={styles.trackingSubtitle}>Enter your package tracking number</Text>
+        {/* Package Tracking Section */}
+        {showTrackingDetails ? renderTrackingResult() : renderTrackingInput()}
 
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Enter tracking number"
-              value={trackingNumber}
-              onChangeText={setTrackingNumber}
-              placeholderTextColor="#a3a3a3"
-            />
-            <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-              <MaterialIcons name="search" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </Card>
-
-        {/* Statistics */}
-        <View style={styles.statsContainer}>
-          <Statistic
-            title="Total Deliveries"
-            value={stats.deliveries}
-            icon={<FontAwesome5 name="box" size={20} color="#2A5D3C" />}
-            change="12% from last month"
-          />
-          <Statistic
-            title={isDeliveryPartner ? "Active Orders" : "Active Shipments"}
-            value={stats.active}
-            icon={<FontAwesome5 name="shipping-fast" size={20} color="#2A5D3C" />}
-          />
-          <Statistic
-            title={isDeliveryPartner ? "Total Earnings" : "Total Spent"}
-            value={stats.earnings}
-            icon={<MaterialIcons name="attach-money" size={24} color="#2A5D3C" />}
-            change="8% from last month"
-          />
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionsGrid}>
-          <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.actionButton}>
-              <View style={styles.actionIconContainer}>
-                <FontAwesome5 name="truck" size={24} color="#2A5D3C" />
+        {/* Environmental Impact Section */}
+        <View style={styles.environmentalContainer}>
+          <Text style={styles.sectionTitle}>Your Environmental Impact</Text>
+          <Card style={styles.environmentalCard}>
+            <Text style={styles.environmentalTitle}>
+              You've reduced carbon emissions by:
+            </Text>
+            
+            <View style={styles.carbonValueContainer}>
+              <Text style={styles.carbonValue}>{environmentalStats.carbonReduced}</Text>
+              <Text style={styles.carbonUnit}>kg of CO₂</Text>
+            </View>
+            
+            <View style={styles.chartContainer}>
+              <PieChart
+                data={carbonEmissionData}
+                width={screenWidth - 40}
+                height={180}
+                chartConfig={chartConfig}
+                accessor={"population"}
+                backgroundColor={"transparent"}
+                paddingLeft={"0"}
+                center={[10, 0]}
+                absolute
+              />
+            </View>
+            
+            <View style={styles.factContainer}>
+              <View style={styles.factIconContainer}>
+                <FontAwesome5 name="tree" size={24} color="#2A5D3C" />
               </View>
-              <Text style={styles.actionText}>Send package</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <View style={styles.actionIconContainer}>
-                <FontAwesome5 name="box" size={24} color="#2A5D3C" />
+              <View style={styles.factContent}>
+                <Text style={styles.factText}>
+                  That's equivalent to saving {environmentalStats.treesEquivalent} trees!
+                </Text>
+                <Text style={styles.factSubtext}>
+                  Based on your {environmentalStats.trips} eco-friendly deliveries
+                </Text>
               </View>
-              <Text style={styles.actionText}>My packages</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.actionButton}>
-              <View style={styles.actionIconContainer}>
-                <MaterialIcons name="location-on" size={24} color="#2A5D3C" />
-              </View>
-              <Text style={styles.actionText}>Live tracking</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <View style={styles.actionIconContainer}>
-                <MaterialIcons name="receipt" size={24} color="#2A5D3C" />
-              </View>
-              <Text style={styles.actionText}>Billing</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          </Card>
         </View>
 
         {/* Recent Activity */}
         <View style={styles.recentActivityContainer}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <Card style={styles.activityCard}>
-            <ActivityItem
-              title="Order #1001 Delivered"
-              time="2 hours ago"
-              status="completed"
-              icon={<FontAwesome5 name="box" size={16} color="#2A5D3C" />}
-            />
-            <ActivityItem
-              title="Order #1002 In Transit"
-              time="Yesterday"
-              status="in-progress"
-              icon={<FontAwesome5 name="truck" size={16} color="#2A5D3C" />}
-            />
-            <ActivityItem
-              title="Order #1003 Accepted"
-              time="2 days ago"
-              status="pending"
-              icon={<MaterialIcons name="pending-actions" size={16} color="#2A5D3C" />}
-            />
+            {recentActivity.map((activity) => (
+              <ActivityItem
+                key={activity.id}
+                title={activity.title}
+                time={activity.time}
+                status={activity.status}
+                icon={activity.icon}
+              />
+            ))}
             <TouchableOpacity style={styles.viewAllButton}>
               <Text style={styles.viewAllText}>View All Activity</Text>
               <MaterialIcons name="arrow-forward" size={16} color="#2A5D3C" />
@@ -358,6 +770,159 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  searchButtonDisabled: {
+    backgroundColor: "#a3a3a3",
+  },
+  errorText: {
+    color: "#dc2626",
+    marginTop: 10,
+    fontSize: 14,
+  },
+  // Tracking result styles
+  trackingResultCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    marginBottom: 20,
+    padding: 0,
+    overflow: "hidden",
+  },
+  trackingResultHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  trackingResultTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2A5D3C",
+  },
+  closeButton: {
+    padding: 5,
+  },
+  trackingResultContent: {
+    padding: 20,
+  },
+  trackingHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  trackingLabel: {
+    fontSize: 12,
+    color: "#666",
+  },
+  trackingNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2A5D3C",
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  progressContainer: {
+    marginBottom: 25,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 10,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#2A5D3C",
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+  },
+  section: {
+    marginBottom: 25,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2A5D3C",
+    marginBottom: 15,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: "#666",
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: "#2A5D3C",
+    fontWeight: "500",
+    flex: 2,
+    textAlign: "right",
+  },
+  timeline: {
+    marginTop: 10,
+  },
+  timelineEvent: {
+    flexDirection: "row",
+    marginBottom: 15,
+  },
+  timelineIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E8F5E0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  timelineTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#2A5D3C",
+  },
+  timelineTime: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 3,
+  },
+  supportButton: {
+    backgroundColor: "#8CD867",
+    borderRadius: 12,
+    padding: 15,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  supportButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  // Stats and activity styles
   statsContainer: {
     marginBottom: 20,
   },
@@ -397,44 +962,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#16a34a",
   },
-  actionsGrid: {
+  // Environmental Impact Styles
+  environmentalContainer: {
     marginBottom: 20,
   },
-  actionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  actionButton: {
-    width: "48%",
+  environmentalCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
     padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    height: 120,
   },
-  actionIconContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#E8F5E0",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  actionText: {
+  environmentalTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#2A5D3C",
     textAlign: "center",
+    marginBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
+  carbonValueContainer: {
+    alignItems: "center",
     marginBottom: 15,
-    color: "#fff",
   },
+  carbonValue: {
+    fontSize: 36,
+    fontWeight: "bold",
+    color: "#2A5D3C",
+  },
+  carbonUnit: {
+    fontSize: 16,
+    color: "#666",
+  },
+  chartContainer: {
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  factContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E8F5E0",
+    borderRadius: 12,
+    padding: 15,
+  },
+  factIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  factContent: {
+    flex: 1,
+  },
+  factText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2A5D3C",
+    marginBottom: 5,
+  },
+  factSubtext: {
+    fontSize: 14,
+    color: "#666",
+  },
+  // Recent Activity styles
   recentActivityContainer: {
     marginBottom: 20,
   },
@@ -512,6 +1102,7 @@ const styles = StyleSheet.create({
     color: "#2A5D3C",
     marginRight: 5,
   },
+  // Earnings styles
   earningsContainer: {
     marginBottom: 30,
   },
@@ -553,6 +1144,4 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 14,
-  },
-})
-
+  }});

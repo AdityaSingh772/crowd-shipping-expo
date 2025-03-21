@@ -67,6 +67,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   useEffect(() => {
     const checkUserSession = async () => {
       try {
+        const token=await AsyncStorage.getItem('token');
+        console.log(token);
         const userDataString = await AsyncStorage.getItem('userData');
         const storedUserType = await AsyncStorage.getItem('userType');
         

@@ -127,7 +127,7 @@ const TransactionItem = ({ transaction }: { transaction: Transaction }) => {
 export default function PaymentsScreen() {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("transactions")
-  const isDeliveryPartner = user?.userType === "partner"
+  const isDeliveryPartner = user?.role === "partner"
   const [fromLocation, setFromLocation] = useState("Denmark")
   const [toLocation, setToLocation] = useState("Germany")
 

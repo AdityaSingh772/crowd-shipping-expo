@@ -109,7 +109,7 @@ const DeliveryStatusBadge = ({ status }: { status: Delivery["status"] }) => {
 export default function DeliveriesScreen() {
   const { user } = useAuth()
   const [filter, setFilter] = useState<Delivery["status"] | "all">("all")
-  const isDeliveryPartner = user?.userType === "partner"
+  const isDeliveryPartner = user?.role === "partner"
 
   const filteredDeliveries =
     filter === "all" ? SAMPLE_DELIVERIES : SAMPLE_DELIVERIES.filter((delivery) => delivery.status === filter)
